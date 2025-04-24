@@ -4,7 +4,7 @@ import os
 
 from llama_index.core.memory import ChatMemoryBuffer
 
-from client import MCPAgent, get_llm
+from client import MCPAgent, get_llm, MCP
 
 
 if os.path.exists("debug.log"):
@@ -18,8 +18,9 @@ def main():
     CHAT_MEMORY = ChatMemoryBuffer(token_limit=40_000)
 
     async def run_agent(input: str, chat_history: ChatMemoryBuffer) -> ChatMemoryBuffer:
-        async with MCPAgent(llm=LLM, chat_history=chat_history) as agent:
-            agent = MCPAgent(llm=LLM, chat_history=chat_history)
+        mcp_client = MCP()
+        async with mcp_client as mcp:
+            agent = MCPAgent(llm=LLM, mcp=mcp, chat_history=chat_history)
             await agent.run(input=input)
             return agent.chat_history
         
