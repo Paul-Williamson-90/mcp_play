@@ -48,15 +48,14 @@ class MCPAgent(Workflow):
         self.available_tools: Optional[list[dict[str, Any]]] = None
         self.session: Optional[ClientSession] = None
         
-    async def _get_available_tools(self):
-        response = await self.session.list_tools()
-        available_tools = [{ 
-            "name": tool.name,
-            "description": tool.description,
-            "input_schema": tool.inputSchema
-        } for tool in response.tools]
-        self.available_tools = available_tools
-    
+    async def __aenter__(self):
+        await self.exit_stack.__aenter__()  # Enter the exit stack
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.cleanup()  # Ensure cleanup is called
+        await self.exit_stack.__aexit__(exc_type, exc_val, exc_tb)
+
     async def cleanup(self):
         """Clean up resources"""
         if self.exit_stack:
@@ -65,6 +64,15 @@ class MCPAgent(Workflow):
             except RuntimeError as e:
                 logger.error(f"Error during cleanup: {e}")
                 raise
+        
+    async def _get_available_tools(self):
+        response = await self.session.list_tools()
+        available_tools = [{ 
+            "name": tool.name,
+            "description": tool.description,
+            "input_schema": tool.inputSchema
+        } for tool in response.tools]
+        self.available_tools = available_tools
         
     async def _connect_to_server(self):
         """Connect to an MCP server
