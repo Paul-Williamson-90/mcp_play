@@ -39,11 +39,6 @@ class MCP:
         return available_tools
         
     async def _connect_to_server(self):
-        """Connect to an MCP server
-        
-        Args:
-            server_script_path: Path to the server script (.py or .js)
-        """
         if not self.server_script_path:
             logger.warning("No server script path provided. Skipping server connection.")
             return
