@@ -23,21 +23,20 @@ class MCP:
 
     async def cleanup(self):
         """Clean up resources"""
-        if self.exit_stack:
-            try:
-                await self.exit_stack.aclose()
-            except RuntimeError as e:
-                logger.error(f"Error during cleanup: {e}")
-                raise
+        try:
+            await self.exit_stack.aclose()
+        except RuntimeError as e:
+            logger.error(f"Error during cleanup: {e}")
+            raise
         
-    async def _get_available_tools(self):
+    async def get_available_tools(self) -> list[dict[str, Any]]:
         response = await self.session.list_tools()
         available_tools = [{ 
             "name": tool.name,
             "description": tool.description,
             "input_schema": tool.inputSchema
         } for tool in response.tools]
-        self.available_tools = available_tools
+        return available_tools
         
     async def _connect_to_server(self):
         """Connect to an MCP server
