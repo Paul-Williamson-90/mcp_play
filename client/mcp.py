@@ -14,6 +14,7 @@ class MCP:
 
     async def __aenter__(self):
         await self.exit_stack.__aenter__()  # Enter the exit stack
+        await self._connect_to_server()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
