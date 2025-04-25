@@ -1,9 +1,6 @@
 import logging
 from typing import Any, Optional
-from contextlib import AsyncExitStack
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
 from mcp.types import TextContent, ImageContent, EmbeddedResource
 from llama_index.core.workflow import StartEvent, StopEvent, Workflow, step
 from llama_index.core.llms.llm import LLM
@@ -16,6 +13,7 @@ from client.events import AgentReasoningStep, ToolExecutionStep, AgentResponseSt
 from client.prompts import ReasoningPrompt, ResponsePrompt
 from client.pydantics import ReasoningStep, ToolSelection
 from client.invocations import invocation_validator
+from client.mcp import MCP
 
 
 logger = logging.getLogger(__name__)
@@ -34,77 +32,16 @@ class MCPAgent(Workflow):
     def __init__(
         self,
         llm: LLM,
-        server_script_path: Optional[str] = "servers/weather.py",
+        mcp: MCP,
         chat_history: Optional[ChatMemoryBuffer] = None,
     ):
         super().__init__(timeout=None)
-        self.server_script_path = server_script_path
-        self.exit_stack = AsyncExitStack()
+        self.mcp = mcp
         self.llm = llm
         self.chat_history = (
             chat_history or ChatMemoryBuffer(token_limit=DEFAULT_TOKEN_LIMIT)
         )
         self.internal_memory = ChatMemoryBuffer(token_limit=DEFAULT_TOKEN_LIMIT)
-        self.available_tools: Optional[list[dict[str, Any]]] = None
-        self.session: Optional[ClientSession] = None
-        
-    async def __aenter__(self):
-        await self.exit_stack.__aenter__()  # Enter the exit stack
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.cleanup()  # Ensure cleanup is called
-        await self.exit_stack.__aexit__(exc_type, exc_val, exc_tb)
-
-    async def cleanup(self):
-        """Clean up resources"""
-        if self.exit_stack:
-            try:
-                await self.exit_stack.aclose()
-            except RuntimeError as e:
-                logger.error(f"Error during cleanup: {e}")
-                raise
-        
-    async def _get_available_tools(self):
-        response = await self.session.list_tools()
-        available_tools = [{ 
-            "name": tool.name,
-            "description": tool.description,
-            "input_schema": tool.inputSchema
-        } for tool in response.tools]
-        self.available_tools = available_tools
-        
-    async def _connect_to_server(self):
-        """Connect to an MCP server
-        
-        Args:
-            server_script_path: Path to the server script (.py or .js)
-        """
-        if not self.server_script_path:
-            logger.warning("No server script path provided. Skipping server connection.")
-            return
-        
-        is_python = self.server_script_path.endswith('.py')
-        is_js = self.server_script_path.endswith('.js')
-        if not (is_python or is_js):
-            raise ValueError("Server script must be a .py or .js file")
-            
-        command = "python" if is_python else "node"
-        server_params = StdioServerParameters(
-            command=command,
-            args=[self.server_script_path],
-            env=None
-        )
-        
-        stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-        self.stdio, self.write = stdio_transport
-        self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
-        
-        await self.session.initialize()
-        
-        response = await self.session.list_tools()
-        tools = response.tools
-        logger.info(f"Connected to server with tools: {", ".join([str(tool.name) for tool in tools])}")
         
     async def get_chat_history(self) -> str:
         chat_history = self.chat_history.get_all()
@@ -123,12 +60,6 @@ class MCPAgent(Workflow):
         
     @step
     async def agent_preparation_step(self, ev: StartEvent) -> AgentReasoningStep:
-        await self._connect_to_server()
-        if isinstance(self.session, ClientSession):
-            await self._get_available_tools()
-            logger.info(
-                f"\nAvailable tools: {", ".join([tool.get("name", None) for tool in self.available_tools if tool.get("name", None)])}"
-            )
         user_input = ev.input
         user_msg = ChatMessage(role=MessageRole.USER, content=user_input)
         self.chat_history.put(user_msg)
@@ -139,7 +70,7 @@ class MCPAgent(Workflow):
     @step
     async def agent_reasoning_step(self, ev: AgentReasoningStep) -> ToolExecutionStep | AgentResponseStep:
         chat_history = await self.get_chat_history()
-        available_tools = self.available_tools
+        available_tools = await self.mcp.get_available_tools()
         thoughts_str = await self.get_thoughts()
         
         prompt = self._reasoning_prompt.format(
@@ -178,8 +109,8 @@ class MCPAgent(Workflow):
         arguments = ev.arguments
         
         try:
-            tool_response = await self.session.call_tool(
-                name=tool_name, arguments=arguments
+            tool_response = await self.mcp.call_tool(
+                tool_name=tool_name, arguments=arguments
             )
             
         except Exception as e:
