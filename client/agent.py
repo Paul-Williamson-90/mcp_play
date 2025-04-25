@@ -134,15 +134,6 @@ class MCPAgent(Workflow):
         for content in content_list:
             if isinstance(content, TextContent):
                 text = content.text
-                self.internal_memory.put(
-                    ChatMessage(
-                        role=MessageRole.TOOL, 
-                        content=text, 
-                        additional_kwargs={
-                            "tool_call_id": tool_name
-                        }
-                    )
-                )
                 texts.append(text)
             
             elif isinstance(content, ImageContent):
@@ -154,6 +145,16 @@ class MCPAgent(Workflow):
             else:
                 logger.error("Unknown content type returned from tool.")
                 raise ValueError("Unknown content type returned from tool.")
+            
+        self.internal_memory.put(
+            ChatMessage(
+                role=MessageRole.TOOL, 
+                content="\n".join(texts), 
+                additional_kwargs={
+                    "tool_call_id": tool_name
+                }
+            )
+        )
             
         logger.info(f"Tool Response: {"\n".join(texts)}")
         return AgentReasoningStep()
