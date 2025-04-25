@@ -16,6 +16,7 @@ class MCP:
     ):
         self.server_script_path = server_script_path
         self.exit_stack = AsyncExitStack()
+        self.session: Optional[ClientSession] = None
 
     async def __aenter__(self):
         await self.exit_stack.__aenter__()  # Enter the exit stack
@@ -61,8 +62,8 @@ class MCP:
         )
         
         stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
-        self.stdio, self.write = stdio_transport
-        self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
+        stdio, write = stdio_transport
+        self.session = await self.exit_stack.enter_async_context(ClientSession(stdio, write))
         
         await self.session.initialize()
         
