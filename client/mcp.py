@@ -1,8 +1,13 @@
+import logging
 from typing import Any, Optional
 from contextlib import AsyncExitStack
 
 from mcp import ClientSession, StdioServerParameters
+from mcp.types import CallToolResult
 from mcp.client.stdio import stdio_client
+
+
+logger = logging.getLogger(__name__)
 
 class MCP:
     def __init__(
@@ -65,11 +70,11 @@ class MCP:
         tools = response.tools
         logger.info(f"Connected to server with tools: {", ".join([str(tool.name) for tool in tools])}")
    
-   async def call_tool(self, tool_name: str, arguments: dict[str, Any]):
-      try:
-       tool_response = await self.session.call_tool(
-         name=tool_name, arguments=arguments
-       )
-       return tool_response
-      except Exception as e:
-        logger.error(f"Error calling tool {tool_name}: {e}")
+    async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> CallToolResult:
+        try:
+            tool_response = await self.session.call_tool(
+                name=tool_name, arguments=arguments
+            )
+            return tool_response
+        except Exception as e:
+            logger.error(f"Error calling tool {tool_name}: {e}")

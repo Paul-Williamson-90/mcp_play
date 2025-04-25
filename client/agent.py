@@ -1,9 +1,6 @@
 import logging
 from typing import Any, Optional
-from contextlib import AsyncExitStack
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
 from mcp.types import TextContent, ImageContent, EmbeddedResource
 from llama_index.core.workflow import StartEvent, StopEvent, Workflow, step
 from llama_index.core.llms.llm import LLM
@@ -113,7 +110,7 @@ class MCPAgent(Workflow):
         
         try:
             tool_response = await self.mcp.call_tool(
-                name=tool_name, arguments=arguments
+                tool_name=tool_name, arguments=arguments
             )
             
         except Exception as e:
