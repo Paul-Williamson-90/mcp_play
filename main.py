@@ -18,8 +18,7 @@ def main():
     CHAT_MEMORY = ChatMemoryBuffer(token_limit=40_000)
 
     async def run_agent(input: str, chat_history: ChatMemoryBuffer) -> ChatMemoryBuffer:
-        mcp_client = MCP()
-        async with mcp_client as mcp:
+        async with MCP() as mcp:
             agent = MCPAgent(llm=LLM, mcp=mcp, chat_history=chat_history)
             await agent.run(input=input)
             return agent.chat_history
